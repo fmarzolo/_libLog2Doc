@@ -38,29 +38,39 @@ Example:
             Dim myLog As logClass
             %Include "lsconst.lss"
             Sub Initialize
-            On Error GoTo sbreng
-            Set s =New NotesSession
-            Set logdoc=New NotesDocument(s.Currentdatabase)
-            'adding some arbitrary fields, not mandatory   
-            logdoc.form="log"
-            logdoc.server=s.Currentdatabase.Server
-            logdoc.filepath=s.Currentdatabase.Filepath
-            If Not s.Currentagent Is Nothing Then
-            logdoc.agent=s.Currentagent.name
-            End If
-            'log object creation
-            Set myLog=New logClass(s,logdoc ,"Body", True)
-            'set deletion old log at exiting (destructor), set view name and how much docs to keep
-            Call mylog.deleteOldLogsExiting("log",20)
-            Call myLog.addTextLine(myLog.timeText() & " Started")
-            Call myLog.addErrorTextLine("Error test")
-            Call myLog.saveOnTerminate(False)               'set to not save log in case of being mailed
-            'set to send log at mail addresses at exiting           
-            'If profileDoc.connLogActive(0)="Y" And Len(profileDoc.connLogAddress(0))>0 then
-            '           Call myLog.setSendLogOnTerminate(profileDoc.connLogAddress)
-            'Else
-            '           Call myLog.setSendLogOnTerminate("")
-            'End if
+	            On Error GoTo sbreng
+	            Set s =New NotesSession
+		    'simple initialization
+			    Set myLog=New logClass(s,Nothing ,"Body", True)
+		    'custom initialization
+		            Set logdoc=New NotesDocument(s.Currentdatabase)
+		            'adding some arbitrary fields, not mandatory   
+		            logdoc.form="log"
+		            logdoc.server=s.Currentdatabase.Server
+		            logdoc.filepath=s.Currentdatabase.Filepath
+		            If Not s.Currentagent Is Nothing Then
+		            	logdoc.agent=s.Currentagent.name
+		            End If
+		            'log object creation
+			    Set myLog=New logClass(s,logdoc ,"Body", True)
+		    'end initialization
+
+		    'set deletion old log at exiting (destructor), set view name and how much docs to keep
+		    Call mylog.deleteOldLogsExiting("log",20)
+		    Call myLog.addTextLine(myLog.timeText() & " Started")
+		    Call myLog.addErrorTextLine("Error test")
+		    Call myLog.saveOnTerminate(True)               'set to not save log in case of being mailed
+		    'set to send log at mail addresses at exiting (maybe one of these a mail-in DB)       
+		    'If profileDoc.connLogActive(0)="Y" And Len(profileDoc.connLogAddress(0))>0 then
+		    '           Call myLog.setSendLogOnTerminate(profileDoc.connLogAddress)
+		    'Else
+	            '           Call myLog.setSendLogOnTerminate("")
+	            'End if
+	endop:
+	            Exit Sub
+	sbreng:
+                Error Err, "Error: " & Err & " - " & Error$ & " (" & GetThreadInfo(LSI_THREAD_PROC) & ", line: " & Erl & ")"
+            End Sub
            
 %END REM
 Public Class logClass
