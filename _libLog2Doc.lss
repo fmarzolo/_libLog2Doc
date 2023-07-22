@@ -14,7 +14,7 @@ Const LSI_THREAD_CALLMODULE=11
 
 %REM
             Library logClass, alias _libLog2Doc
-            Created Sep 18, 2017 by Francesco Marzolo / Besttool
+            Created Sep 18, 2017 by Francesco Marzolo francesco (sign that you know) marzolo (dot) com
             2017-09-18: added capability to create document in current DB
             2018-02-03: added managed error for ACL not allowing deletions
             2018-02-08: saving document in destructor
@@ -32,13 +32,13 @@ Const LSI_THREAD_CALLMODULE=11
 %REM
 mantains log documents on a Notes View, Allowing to keep only last X documents
 Example:
-            Use "log"
+            Use "_libLog2Doc"
             Dim s As NotesSession
             Dim logdoc As NotesDocument
             Dim myLog As logClass
             %Include "lsconst.lss"
             Sub Initialize
-            On Error GoTo gesterr
+            On Error GoTo sbreng
             Set s =New NotesSession
             Set logdoc=New NotesDocument(s.Currentdatabase)
             'adding some arbitrary fields, not mandatory   
@@ -136,7 +136,7 @@ Public Class logClass
 	%END REM
 	Public Sub New (ns As NotesSession,pdoc As NotesDocument,fieldName$, EmptiesOnStart As Integer)
 		saveLogDoc=False
-		On Error GoTo gesterr
+		On Error GoTo sbreng
 		me.EmptiesOnStart=EmptiesOnStart
 		modified=False
 		Call me.setSendOnlyifError(False)
@@ -184,13 +184,13 @@ Public Class logClass
 		
 endop:
 		Exit Sub
-gesterr:
+sbreng:
 		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
 	
 	Public Sub Delete
-		On Error GoTo gesterr
+		On Error GoTo sbreng
 		Call KeepOnlyLastLogs
 		
 endop:
@@ -220,12 +220,12 @@ endop:
 		End If
 		If doPrint Then Print "deleting " & getClassName() & GetThreadInfo(LSI_THREAD_PROC)
 		Exit Sub
-gesterr:
+sbreng:
 		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
 	Private Sub empties
-		On Error GoTo gesterr
+		On Error GoTo sbreng
 		modified=True
 		Call rtitem.remove()
 		Set rtitem=Doc.Createrichtextitem(fieldName)
@@ -235,7 +235,7 @@ gesterr:
 		
 endop:
 		Exit Sub
-gesterr:
+sbreng:
 		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
@@ -244,7 +244,7 @@ gesterr:
         Description: add a normal text to log
 	%END REM
 	Public Sub addTextLine(txt$)
-		On Error GoTo gesterr
+		On Error GoTo sbreng
 		If modified=False And EmptiesOnStart  Then
 			Call empties()
 		End If
@@ -254,7 +254,7 @@ gesterr:
 		
 endop:
 		Exit Sub
-gesterr:
+sbreng:
 		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
@@ -266,7 +266,7 @@ gesterr:
 	End Property
 	
 	Public Sub addErrorTextLine(txt$)
-		On Error GoTo gesterr
+		On Error GoTo sbreng
 		If modified=False And EmptiesOnStart  Then
 			Call empties()
 		End If
@@ -280,7 +280,7 @@ gesterr:
 		
 endop:
 		Exit Sub
-gesterr:
+sbreng:
 		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
