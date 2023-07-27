@@ -1,4 +1,7 @@
+'version 2023-07-27
+
 Option Declare
+
 Const LSI_THREAD_LINE=0
 Const LSI_THREAD_PROC=1
 Const LSI_THREAD_MODULE=2
@@ -11,27 +14,27 @@ Const LSI_THREAD_PROCESS_ID=8
 Const LSI_THREAD_TASK_ID=9
 Const LSI_THREAD_CALLPROC=10
 Const LSI_THREAD_CALLMODULE=11
-
 %REM
             Library logClass, alias _libLog2Doc
-            Created Sep 18, 2017 by Francesco Marzolo francesco (sign that you know) marzolo (dot) com
+            Created Sep 18, 2017 by Francesco Marzolo / Besttool
             2017-09-18: added capability to create document in current DB
             2018-02-03: added managed error for ACL not allowing deletions
             2018-02-08: saving document in destructor
-            2018-07-03: Added a way to send and not to save the log in destructor
-            2018-09-11: added me.doc.Savemessageonsend=false on constructor to allow not saving doc when only sent
+            2018-07-03: Added a way to send and not to save the log at destructor
+            2018-09-11: added  me.doc.Savemessageonsend=false on  constructor to allow not saving doc when only sent
             2018-09-11: added deletion of ghost log document in termination (Delete)
             2018-09-18: added function setTextField
             2018-10-02: better message for no deletion log executed
             2018-10-02: added "error" for error string
             2018-10-02: added getClassName
-            2019-12-21: added .hasError and setSendOnlyifError to send error only if has an error (addErrorTextLine called once)
-            					added doPrint if in front end 
+            2019-12-21: added .hasError and setSendOnlyifError to send error only if has an  error (addErrorTextLine called once)
+                                                                        added doPrint if in front end
+            2023-07-27: added .AppendDoclink to inser a link on the log to an object (doc, View, DB)                                                            
             Description: Class log
 %END REM
 %REM
-mantains log documents on a Notes View, Allowing to keep only last X documents
-Example:
+	keep log docs on a view, allow to delete old log document and keep only last X docs
+Example
             Use "_libLog2Doc"
             Dim s As NotesSession
             Dim logdoc As NotesDocument
@@ -71,7 +74,7 @@ Example:
 	sbreng:
                 Error Err, "Error: " & Err & " - " & Error$ & " (" & GetThreadInfo(LSI_THREAD_PROC) & ", line: " & Erl & ")"
             End Sub
-           
+....
 %END REM
 Public Class logClass
 	Private doc As NotesDocument
@@ -86,15 +89,15 @@ Public Class logClass
 	Private LogViewName As String
 	Private docsToKeep As Long
 	Private sendAddresses As Variant
-	Private saveLogDoc As Boolean                                'set terminate so that the doc will be saved (default=true) maybe for send-only via mail
-	Private sendLogDoc As Boolean                               'set terminate so that the doc will be sent (default=false) to "sendAddresses" field
-	Private hasError As Boolean								'
-	Private sendOnlyifError As Boolean							'on terminate send message only if it has an error
+	Private saveLogDoc As Boolean                                'set terminate so that the doc  will be saved (default=true) maybe for send-only via mail
+	Private sendLogDoc As Boolean                               'set terminate so that the doc  will be sent (default=false) to "sendAddresses" field
+	Private hasError As Boolean                                                                                         '
+	Private sendOnlyifError As Boolean                                                                               'on terminate send message only if it has an error
 	Private doPrint As Boolean
 	
 	%REM
                         Sub sendLogOnTerminate
-                        Description: send document at terminate
+                        Description:  al termine invia il documento
 	%END REM
 	Public Sub setSendLogOnTerminate(addresses As Variant)
 		Dim  tName As String, arrAddresses As Variant
@@ -113,7 +116,7 @@ Public Class logClass
 				End If
 			Case Else
 				sendLogDoc=False
-				Error 8003, "Error: " & 8003 & " - "  & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ") Unable to manage addresses type: " & tName
+				Error 8003, "Error: " & 8003 & " - "  & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ") Unable to manage addresses type: " &  tName
 		End Select
 		If sendLogDoc=True Then
 			arrAddresses=FullTrim(ArrayAppend(arrAddresses,addresses))
@@ -144,8 +147,8 @@ Public Class logClass
 	%REM
                                     Constructor. If pDoc is NOTHING a new log document is created with default values in current DB
 	%END REM
-	Public Sub New (ns As NotesSession,pdoc As NotesDocument,fieldName$, EmptiesOnStart As Integer)
-		saveLogDoc=False
+	Public Sub New (ns As NotesSession,pdoc As NotesDocument,fieldName$,  EmptiesOnStart As Integer)
+		saveLogDoc=False 
 		On Error GoTo sbreng
 		me.EmptiesOnStart=EmptiesOnStart
 		modified=False
@@ -183,11 +186,7 @@ Public Class logClass
 		Call rtitem.Appendstyle(stdstyle)
 		Call rtitem.Appendtext(" ")
 		If saveLogDoc Then
-      'field to assure Author access to author, in case Author or reader ACL restrict it
-			Dim authItem As NotesItem
-			Set authitem=me.doc.replaceitemvalue("logAuthUsername", me.ns.username)
-			authitem.isauthors=True
-			Call me.doc.Save(True, False, False)
+			Call me.Save
 		End If
 		
 		doPrint=MayIUseFEClass
@@ -195,7 +194,7 @@ Public Class logClass
 endop:
 		Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
 	
@@ -206,32 +205,34 @@ sbreng:
 endop:
 		If Not Doc Is Nothing Then
 			If sendLogDoc  Then
-				If sendOnlyifError Then 
+				If sendOnlyifError Then
 					If hasError Then Call doc.Send(False, sendAddresses)
 				Else
 					Call doc.Send(False, sendAddresses)
 				End If
 			End If
 			If SaveLogDoc Then
-				Call doc.save(True, False, True)
+				Call me.Save
 			Else
 				'Print "UNID log doc: " & doc.Universalid
 				If doc.Isnewnote Then
-					If doPrint Then Print "Isnewnote, not deleting"
+					'If doPrint Then Print "Isnewnote, not deleting"
 				Else
+					'potrebbe non poter cancellare
 					On Error 4000 Resume Next
 					Call doc.Remove(True)
 					If Err=4000 Then
-						If doPrint Then Print "Unable to delete temp logdoc"
+						If doPrint Then Print "Unable to delete temp  logdoc"
 					End If
+					
 					On Error 4000 GoTo 0
 				End If
 			End If
 		End If
-		If doPrint Then Print "deleting " & getClassName() & GetThreadInfo(LSI_THREAD_PROC)
+		If doPrint Then Print "deleting " & getClassName() &  GetThreadInfo(LSI_THREAD_PROC)
 		Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
 	Private Sub empties
@@ -246,12 +247,12 @@ sbreng:
 endop:
 		Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
 	%REM
         Sub addTextLine
-        Description: add a normal text to log
+        Description: add a text to log
 	%END REM
 	Public Sub addTextLine(txt$)
 		On Error GoTo sbreng
@@ -265,7 +266,7 @@ sbreng:
 endop:
 		Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
 	%REM
@@ -291,7 +292,7 @@ sbreng:
 endop:
 		Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Sub
 	
 	%REM
@@ -311,7 +312,6 @@ sbreng:
 	
 	%REM
                         Sub deleteOldDocsExiting
-                        Description: Comments for Sub
 	%END REM
 	Public Sub deleteOldLogsExiting(LogViewName As String,docsToKeep As Long)
 		me.LogViewName =LogViewName
@@ -328,7 +328,7 @@ sbreng:
 		Dim LogView As NotesView
 		
 		If Not saveLogDoc Then
-			'non viene salvato il documento log, nulla da cancellare
+			'nothing to delete
 			Exit Function
 		End If
 		
@@ -349,8 +349,8 @@ sbreng:
 			Call addErrorTextLine("Unable open view -" & LogViewName & "- to delete old log documents")
 			Exit Function
 		End If
-
-Dim colonna As NotesViewColumn, keepFirstOrLast As Integer
+		'checking the view sort order, to delete first or last documents
+		Dim colonna As NotesViewColumn, keepFirstOrLast As Integer
 		
 		ForAll col In LogView.Columns
 			Set colonna=col
@@ -367,17 +367,19 @@ Dim colonna As NotesViewColumn, keepFirstOrLast As Integer
 		End ForAll
 		
 		If keepFirstOrLast =0 Then
-			Call addErrorTextLine("Not deleting old logs: make the view sorted ascending or descending in any column by @created or @modified to allow deletion of old log documents.")
+			Call addErrorTextLine("Not deleting old logs: make the view sorted  ascending or descending in any column by @created or @modified to allow deletion of old log  documents.")
 			Exit Function
 		End If
 		
-		Dim entries As NotesViewEntryCollection,  discardDocs As NotesDocumentCollection
+		Dim entries As NotesViewEntryCollection,  discardDocs As  NotesDocumentCollection
 		Dim ve As NotesViewEntry, nextve As NotesViewEntry, countEntries As Long
 		Set entries=LogView.Allentries
 		
 		If keepFirstOrLast=1 Then
+			'skip and keep first documents
 			Set ve=entries.Getfirstentry()
 		Else
+			'skip and keep last documents
 			Set ve=entries.Getlastentry()
 		End If
 		
@@ -391,7 +393,7 @@ Dim colonna As NotesViewColumn, keepFirstOrLast As Integer
 			End If                        
 			
 			If ve.Isdocument And ve.Isvalid Then
-				Call entries.Deleteentry(ve) 
+				Call entries.Deleteentry(ve)
 			End If
 			
 			Set ve=nextve
@@ -406,29 +408,35 @@ notAccessDeletion:
 		Call addErrorTextLine("Unable to get access to delete old log documents")
 		Resume Next
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Function
 	
 	%REM
                         Sub save
-                        Description: not mandatory saving (destructor do it), maybe usefull to show temporary activities in long operations
+                        DDescription: not mandatory saving (destructor do it), maybe usefull to show temporary activities in long operations
 	%END REM
 	Public Sub save
 		If saveLogDoc Then
+			If doc.Isnewnote Then
+				'for new document put author field to allow to delete
+				Dim authItem As NotesItem
+				Set authitem=me.doc.replaceitemvalue("logAuthUsername",  me.ns.username)
+				authitem.isauthors=True
+			End If
 			Call doc.save(True, False, True)
 		End If
 		
 	End Sub
 	%REM
             Function getDoc
-            Description: return the log Doc, useful when constructor is being callled without an existing document 
+            Description:  return the log Doc, useful when constructor is being callled without an existing document 
 	%END REM
 	Public Function getDoc() As NotesDocument
 		Set getdoc=doc
 	End Function
 	%REM
             Function TimeText
-            Description: return date time in ISO format: Format(Now, "yyyy-mm-dd hh.nn.ss") & ":"
+            Description:  return date time in ISO format: Format(Now, "yyyy-mm-dd hh.nn.ss") & ":"
 	%END REM
 	Public Function TimeText() As String
 		TimeText=Format(Now, "yyyy-mm-dd hh.nn.ss") & ":"
@@ -445,30 +453,42 @@ sbreng:
 endop:
 		Exit Function
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
 	End Function
 	
 	%REM
-		Function setSendOnlyifError
-		Description: set send mode so message will be sent only if contains error (addErrorTextLine called at least one time)
+                        Function setSendOnlyifError
+                        Description: set send mode so message will be sent only if contains error  (addErrorTextLine called at least one time)
 	%END REM
-	Public Sub setSendOnlyifError(value As Boolean) 
+	Public Sub setSendOnlyifError(value As Boolean)
 		sendOnlyifError=value
 	End Sub
 	
-	Private Function MayIUseFEClass() As Boolean 
+	public Function MayIUseFEClass() As Boolean
 		Const ErrAdtCreateError = 217
 		On Error 217 GoTo NoYouMayNot
-		Dim uiws As NotesUIWorkspace 
-		Set uiws = New NotesUIWorkspace
-
+		Dim uiws As NotesUIWorkspace ' declare front-end class
+		Set uiws = New NotesUIWorkspace 
 		MayIUseFEClass = True  
-		Exit Function 
-
-NOYOUMAYNOT: 
-		MayIUSEFEClass = False 
-		Exit Function 
+		Exit Function
+NOYOUMAYNOT:
+		MayIUSEFEClass = False
+		Exit Function
 	End Function
-
 	
+	%REM
+		Sub AppendDoclink
+		Description: Add a link to the object
+	%END REM
+	Public Sub AppendDoclink(LinkTo As variant, comment As string , HotSpotText As string )
+		On Error GoTo sbreng
+		
+		Call rtitem.AppendDocLink( linkTo , comment$ , HotSpotText$ ) 
+		Call rtitem.Addnewline(1, True)
+		
+		
+		Exit Sub
+sbreng:
+		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")" 
+	End Sub
 End Class
