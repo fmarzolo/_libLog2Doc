@@ -1,19 +1,10 @@
-'version 2023-07-27
+'version 2025-06-29
 
 Option Declare
 
 Const LSI_THREAD_LINE=0
 Const LSI_THREAD_PROC=1
-Const LSI_THREAD_MODULE=2
-Const LSI_THREAD_VERSION=3
-Const LSI_THREAD_LANGUAGE=4
-Const LSI_THREAD_COUNTRY=5
-Const LSI_THREAD_TICKS=6
-Const LSI_THREAD_TICKS_PER_SEC=7
-Const LSI_THREAD_PROCESS_ID=8
-Const LSI_THREAD_TASK_ID=9
-Const LSI_THREAD_CALLPROC=10
-Const LSI_THREAD_CALLMODULE=11
+
 %REM
             Library logClass, alias _libLog2Doc
             Created Sep 18, 2017 by Francesco Marzolo / Besttool
@@ -21,19 +12,21 @@ Const LSI_THREAD_CALLMODULE=11
             2018-02-03: added managed error for ACL not allowing deletions
             2018-02-08: saving document in destructor
             2018-07-03: Added a way to send and not to save the log at destructor
-            2018-09-11: added  me.doc.Savemessageonsend=false on  constructor to allow not saving doc when only sent
+            2018-09-11: added me.doc.Savemessageonsend=false on constructor to allow not saving doc when only sent
             2018-09-11: added deletion of ghost log document in termination (Delete)
             2018-09-18: added function setTextField
             2018-10-02: better message for no deletion log executed
             2018-10-02: added "error" for error string
             2018-10-02: added getClassName
-            2019-12-21: added .hasError and setSendOnlyifError to send error only if has an  error (addErrorTextLine called once)
+            2019-12-21: added .hasError and setSendOnlyifError to send error only if has an error (addErrorTextLine called once)
                                                                         added doPrint if in front end
-            2023-07-27: added .AppendDoclink to inser a link on the log to an object (doc, View, DB)                                                            
+            2023-07-27: added .AppendDoclink to inser a link on the log to an object (doc, View, DB)
+            2026-06-25: added an item "HasError"=1 on document to make its evidence in a log view
+   2026-06-29: added addColoredTextLine(txt, logClass.color) 
             Description: Class log
 %END REM
 %REM
-	keep log docs on a view, allow to delete old log document and keep only last X docs
+keep log docs on a view, allow to delete old log document and keep only last X docs
 Example
             Use "_libLog2Doc"
             Dim s As NotesSession
@@ -41,454 +34,498 @@ Example
             Dim myLog As logClass
             %Include "lsconst.lss"
             Sub Initialize
-	            On Error GoTo sbreng
-	            Set s =New NotesSession
-		    'simple initialization
-			    Set myLog=New logClass(s,Nothing ,"Body", True)
-		    'custom initialization
-		            Set logdoc=New NotesDocument(s.Currentdatabase)
-		            'adding some arbitrary fields, not mandatory   
-		            logdoc.form="log"
-		            logdoc.server=s.Currentdatabase.Server
-		            logdoc.filepath=s.Currentdatabase.Filepath
-		            If Not s.Currentagent Is Nothing Then
-		            	logdoc.agent=s.Currentagent.name
-		            End If
-		            'log object creation
-			    Set myLog=New logClass(s,logdoc ,"Body", True)
-		    'end initialization
+            On Error GoTo sbreng
+            Set s =New NotesSession
+    'simple initialization
+    Set myLog=New logClass(s,Nothing ,"Body", True)
+    'custom initialization
+            Set logdoc=New NotesDocument(s.Currentdatabase)
+            'adding some arbitrary fields, not mandatory 
+            logdoc.form="log"
+            logdoc.server=s.Currentdatabase.Server
+            logdoc.filepath=s.Currentdatabase.Filepath
+            If Not s.Currentagent Is Nothing Then
+            logdoc.agent=s.Currentagent.name
+            End If
+            'log object creation
+    Set myLog=New logClass(s,logdoc ,"Body", True)
+    'end initialization
 
-		    'set deletion old log at exiting (destructor), set view name and how much docs to keep
-		    Call mylog.deleteOldLogsExiting("log",20)
-		    Call myLog.addTextLine(myLog.timeText() & " Started")
-		    Call myLog.addErrorTextLine("Error test")
-		    Call myLog.saveOnTerminate(True)               'set to not save log in case of being mailed
-		    'set to send log at mail addresses at exiting (maybe one of these a mail-in DB)       
-		    'If profileDoc.connLogActive(0)="Y" And Len(profileDoc.connLogAddress(0))>0 then
-		    '           Call myLog.setSendLogOnTerminate(profileDoc.connLogAddress)
-		    'Else
-	            '           Call myLog.setSendLogOnTerminate("")
-	            'End if
-	endop:
-	            Exit Sub
-	sbreng:
+    'set deletion old log at exiting (destructor), set view name and how much docs to keep
+    Call mylog.deleteOldLogsExiting("log",20)
+    Call myLog.addTextLine(myLog.timeText() & " Started")
+    Call myLog.addErrorTextLine("Error test")
+    Call myLog.saveOnTerminate(True) 'set to not save log in case of being mailed
+    'set to send log at mail addresses at exiting (maybe one of these a mail-in DB) 
+    'If profileDoc.connLogActive(0)="Y" And Len(profileDoc.connLogAddress(0))>0 then
+    ' Call myLog.setSendLogOnTerminate(profileDoc.connLogAddress)
+    'Else
+            ' Call myLog.setSendLogOnTerminate("")
+            'End if
+endop:
+            Exit Sub
+sbreng:
                 Error Err, "Error: " & Err & " - " & Error$ & " (" & GetThreadInfo(LSI_THREAD_PROC) & ", line: " & Erl & ")"
             End Sub
 ....
 %END REM
 Public Class logClass
-	Private doc As NotesDocument
-	Private db As NotesDatabase
-	Private rtitem As NotesRichTextItem
-	Private stdstyle As  NotesRichTextStyle
-	Private boldstyle As  NotesRichTextStyle
-	Private modified As Integer
-	Private ns As NotesSession
-	Private fieldName As String
-	Private EmptiesOnStart As Integer
-	Private LogViewName As String
-	Private docsToKeep As Long
-	Private sendAddresses As Variant
-	Private saveLogDoc As Boolean                                'set terminate so that the doc  will be saved (default=true) maybe for send-only via mail
-	Private sendLogDoc As Boolean                               'set terminate so that the doc  will be sent (default=false) to "sendAddresses" field
-	Private hasError As Boolean                                                                                         '
-	Private sendOnlyifError As Boolean                                                                               'on terminate send message only if it has an error
-	Private doPrint As Boolean
-	
-	%REM
+ Public Property Get COLOR_BLACK As Integer: COLOR_BLACK = 0: End Property
+ Public Property Get COLOR_WHITE As Integer: COLOR_WHITE = 1: End Property
+ Public Property Get COLOR_RED As Integer: COLOR_RED = 2: End Property
+ Public Property Get COLOR_GREEN As Integer: COLOR_GREEN = 3: End Property
+ Public Property Get COLOR_BLUE As Integer: COLOR_BLUE = 4: End Property
+ Public Property Get COLOR_MAGENTA As Integer: COLOR_MAGENTA = 5: End Property
+ Public Property Get COLOR_CYAN As Integer: COLOR_CYAN = 6: End Property
+ Public Property Get COLOR_YELLOW As Integer: COLOR_YELLOW = 7: End Property
+ Public Property Get COLOR_DKRED As Integer: COLOR_DKRED = 8: End Property
+ Public Property Get COLOR_DKGREEN As Integer: COLOR_DKGREEN = 9: End Property
+ Public Property Get COLOR_DKBLUE As Integer: COLOR_DKBLUE = 10: End Property
+ Public Property Get COLOR_DKMAGENTA As Integer: COLOR_DKMAGENTA = 11: End Property
+ Public Property Get COLOR_DKCYAN As Integer: COLOR_DKCYAN = 12: End Property
+ Public Property Get COLOR_GRAY As Integer: COLOR_GRAY = 14: End Property
+ Private doc As NotesDocument
+ Private db As NotesDatabase
+ Private rtitem As NotesRichTextItem
+ Private stdstyle As NotesRichTextStyle
+ Private boldstyle As NotesRichTextStyle
+ Private modified As Integer
+ Private ns As NotesSession
+ Private fieldName As String
+ Private EmptiesOnStart As Integer
+ Private LogViewName As String
+ Private docsToKeep As Long
+ Private sendAddresses As Variant
+ Private saveLogDoc As Boolean 'set terminate so that the doc will be saved (default=true) maybe for send-only via mail
+ Private sendLogDoc As Boolean 'set terminate so that the doc will be sent (default=false) to "sendAddresses" field
+ Private hasError As Boolean '
+ Private sendOnlyifError As Boolean 'on terminate send message only if it has an error
+ Private doPrint As Boolean
+
+ %REM
                         Sub sendLogOnTerminate
-                        Description:  al termine invia il documento
-	%END REM
-	Public Sub setSendLogOnTerminate(addresses As Variant)
-		Dim  tName As String, arrAddresses As Variant
-		tName =TypeName(addresses)
-		arrAddresses=Split("","")
-		Select Case tName
-			Case "EMPTY"
-				sendLogDoc=False
-			Case "STRING"
-				If Len(addresses)>0 Then
-					sendLogDoc=True
-				End If
-			Case  "STRING( )"
-				If Len(addresses(0))>0 Then
-					sendLogDoc=True
-				End If
-			Case Else
-				sendLogDoc=False
-				Error 8003, "Error: " & 8003 & " - "  & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ") Unable to manage addresses type: " &  tName
-		End Select
-		If sendLogDoc=True Then
-			arrAddresses=FullTrim(ArrayAppend(arrAddresses,addresses))
-			sendAddresses=arrAddresses
-		End If
-		
-		
-	End Sub
-	
-	%REM
+                        Description: al termine invia il documento
+ %END REM
+ Public Sub setSendLogOnTerminate(addresses As Variant)
+  Dim tName As String, arrAddresses As Variant
+  tName =TypeName(addresses)
+  arrAddresses=Split("","")
+  Select Case tName
+   Case "EMPTY"
+    sendLogDoc=False
+   Case "STRING"
+    If Len(addresses)>0 Then
+     sendLogDoc=True
+    End If
+   Case "STRING( )"
+    If Len(addresses(0))>0 Then
+     sendLogDoc=True
+    End If
+   Case Else
+    sendLogDoc=False
+    Error 8003, "Error: " & 8003 & " - " & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ") Unable to manage addresses type: " & tName
+  End Select
+  If sendLogDoc=True Then
+   arrAddresses=FullTrim(ArrayAppend(arrAddresses,addresses))
+   sendAddresses=arrAddresses
+  End If
+
+
+ End Sub
+
+ %REM
                         Sub saveOnTerminate
                         Description: set wether to save log doc at exiting
-	%END REM
-	Public Sub saveOnTerminate(saveOnTerm As Boolean)
-		me.saveLogDoc=saveOnTerm
-	End Sub
-	
-	%REM
+ %END REM
+ Public Sub saveOnTerminate(saveOnTerm As Boolean)
+  me.saveLogDoc=saveOnTerm
+ End Sub
+
+ %REM
                         Sub sendOnTerminate
                         Description: set wether to send log doc at exiting
-	%END REM
-	Public Sub sendOnTerminate(sendOnTerm As Boolean)
-		me.sendLogDoc=sendOnTerm
-	End Sub
-	
-	
-	
-	%REM
-                                    Constructor. If pDoc is NOTHING a new log document is created with default values in current DB
-	%END REM
-	Public Sub New (ns As NotesSession,pdoc As NotesDocument,fieldName$,  EmptiesOnStart As Integer)
-		saveLogDoc=False 
-		On Error GoTo sbreng
-		me.EmptiesOnStart=EmptiesOnStart
-		modified=False
-		Call me.setSendOnlyifError(False)
-		
-		If pDoc Is Nothing Then
-			Set me.doc=ns.Currentdatabase.Createdocument()
-			me.doc.Savemessageonsend=False
-			me.doc.form="Log"                                
-		Else
-			Set me.doc=pdoc
-		End If
-		If Not ns.Currentagent Is Nothing Then
-			Call me.setField("agent", ns.Currentagent.name)
-		End If
-		Me.doc.CreationDate=Now
-		Set me.db=me.doc.Parentdatabase
-		Set me.ns=ns
-		me.fieldname=fieldName
-		Set rtitem=Doc.Getfirstitem(fieldName$)
-		If rtitem Is Nothing Then
-			Set rtitem=Doc.Createrichtextitem(fieldName$)
-			modified=True
-		End If                                   
-		
-		Set boldstyle=me.ns.Createrichtextstyle()
-		Set stdstyle=me.ns.Createrichtextstyle()
-		boldstyle.FontSize = 10
-		boldstyle.bold=True
-		boldstyle.Notescolor=COLOR_RED
-		
-		stdstyle.FontSize = 9
-		stdstyle.bold=False
-		stdstyle.Notescolor=Color_black
-		Call rtitem.Appendstyle(stdstyle)
-		Call rtitem.Appendtext(" ")
-		If saveLogDoc Then
-			Call me.Save
-		End If
-		
-		doPrint=MayIUseFEClass
-		
+ %END REM
+ Public Sub sendOnTerminate(sendOnTerm As Boolean)
+  me.sendLogDoc=sendOnTerm
+ End Sub
+
+
+
+ %REM
+        Constructor. If pDoc is NOTHING a new log document is created with default values in current DB
+ %END REM
+ Public Sub New (ns As NotesSession,pdoc As NotesDocument,fieldName$, EmptiesOnStart As Integer)
+  saveLogDoc=False
+  On Error GoTo sbreng
+  me.EmptiesOnStart=EmptiesOnStart
+  modified=False
+  Call me.setSendOnlyifError(False)
+
+  If pDoc Is Nothing Then
+   Set me.doc=ns.Currentdatabase.Createdocument()
+   me.doc.Savemessageonsend=False
+   me.doc.form="Log" 
+  Else
+   Set me.doc=pdoc
+  End If
+  If Not ns.Currentagent Is Nothing Then
+   Call me.setField("agent", ns.Currentagent.name)
+  End If
+  Me.doc.CreationDate=Now
+  Set me.db=me.doc.Parentdatabase
+  Set me.ns=ns
+  me.fieldname=fieldName
+  Set rtitem=Doc.Getfirstitem(fieldName$)
+  If rtitem Is Nothing Then
+   Set rtitem=Doc.Createrichtextitem(fieldName$)
+   modified=True
+  End If 
+
+  Set boldstyle=me.ns.Createrichtextstyle()
+  Set stdstyle=me.ns.Createrichtextstyle()
+  boldstyle.FontSize = 10
+  boldstyle.bold=True
+  boldstyle.Notescolor=Me.COLOR_RED
+
+  stdstyle.FontSize = 9
+  stdstyle.bold=False
+  stdstyle.Notescolor=Me.COLOR_BLACK
+  Call rtitem.Appendstyle(stdstyle)
+  Call rtitem.Appendtext(" ")
+  If saveLogDoc Then
+   Call me.Save
+  End If
+
+  doPrint=MayIUseFEClass
+
 endop:
-		Exit Sub
+  Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
-	End Sub
-	
-	
-	Public Sub Delete
-		On Error GoTo sbreng
-		Call KeepOnlyLastLogs
-		
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Sub
+
+
+ Public Sub Delete
+  On Error GoTo sbreng
+  Call KeepOnlyLastLogs
+
 endop:
-		If Not Doc Is Nothing Then
-			If sendLogDoc  Then
-				If sendOnlyifError Then
-					If hasError Then Call doc.Send(False, sendAddresses)
-				Else
-					Call doc.Send(False, sendAddresses)
-				End If
-			End If
-			If SaveLogDoc Then
-				Call me.Save
-			Else
-				'Print "UNID log doc: " & doc.Universalid
-				If doc.Isnewnote Then
-					'If doPrint Then Print "Isnewnote, not deleting"
-				Else
-					'potrebbe non poter cancellare
-					On Error 4000 Resume Next
-					Call doc.Remove(True)
-					If Err=4000 Then
-						If doPrint Then Print "Unable to delete temp  logdoc"
-					End If
-					
-					On Error 4000 GoTo 0
-				End If
-			End If
-		End If
-		If doPrint Then Print "deleting " & getClassName() &  GetThreadInfo(LSI_THREAD_PROC)
-		Exit Sub
+  If Not Doc Is Nothing Then
+   If sendLogDoc Then
+    If sendOnlyifError Then
+     If hasError Then Call doc.Send(False, sendAddresses)
+    Else
+     Call doc.Send(False, sendAddresses)
+    End If
+   End If
+   If SaveLogDoc Then
+    Call me.Save
+   Else
+    'Print "UNID log doc: " & doc.Universalid
+    If doc.Isnewnote Then
+     'If doPrint Then Print "Isnewnote, not deleting"
+    Else
+     'potrebbe non poter cancellare
+     On Error 4000 Resume Next
+     Call doc.Remove(True)
+     If Err=4000 Then
+      If doPrint Then Print "Unable to delete temp logdoc"
+     End If
+
+     On Error 4000 GoTo 0
+    End If
+   End If
+  End If
+  If doPrint Then Print "deleting " & getClassName() & GetThreadInfo(LSI_THREAD_PROC)
+  Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
-	End Sub
-	
-	Private Sub empties
-		On Error GoTo sbreng
-		modified=True
-		Call rtitem.remove()
-		Set rtitem=Doc.Createrichtextitem(fieldName)
-		Call rtitem.Appendstyle(stdstyle)
-		Call rtitem.Appendtext(" ")
-		Call rtitem.Addnewline(1, True)
-		
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Sub
+
+ Private Sub empties
+  On Error GoTo sbreng
+  modified=True
+  Call rtitem.remove()
+  Set rtitem=Doc.Createrichtextitem(fieldName)
+  Call rtitem.Appendstyle(stdstyle)
+  Call rtitem.Appendtext(" ")
+  Call rtitem.Addnewline(1, True)
+
 endop:
-		Exit Sub
+  Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
-	End Sub
-	
-	%REM
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Sub
+
+ %REM
         Sub addTextLine
         Description: add a text to log
-	%END REM
-	Public Sub addTextLine(txt$)
-		On Error GoTo sbreng
-		If modified=False And EmptiesOnStart  Then
-			Call empties()
-		End If
-		modified=True
-		Call rtitem.Appendtext(txt)
-		Call rtitem.Addnewline(1, True)
-		
+ %END REM
+ Public Sub addTextLine(txt$)
+  On Error GoTo sbreng
+  Call me.addColoredTextLine(txt, Me.COLOR_BLACK)
 endop:
-		Exit Sub
+  Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
-	End Sub
-	
-	%REM
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Sub
+
+ %REM
+ ' Sub addColoredTextLine
+ ' Description: add a colored text to log
+ %END REM
+ Public Sub addColoredTextLine(txt As String, color As Integer)
+  On Error GoTo sbreng
+  If modified=False And EmptiesOnStart Then
+   Call empties()
+  End If
+  modified=True
+
+  Dim tempStyle As NotesRichTextStyle
+  Set tempStyle = me.ns.CreateRichTextStyle()
+  tempStyle.FontSize = stdstyle.FontSize
+  tempStyle.Bold = False
+  tempStyle.NotesColor = color
+
+  Call rtitem.AppendStyle(tempStyle)
+  Call rtitem.AppendText(txt)
+  Call rtitem.AddNewline(1, True)
+
+  ' Reset to standard style forsubsequent calls
+  Call rtitem.AppendStyle(stdstyle)
+  Call rtitem.AppendText("")
+
+endop:
+  Exit Sub
+sbreng:
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Sub
+
+ %REM
                         Function ismodified
-	%END REM
-	Property Get ismodified As Integer
-		ismodified=modified
-	End Property
-	
-	Public Sub addErrorTextLine(txt$)
-		On Error GoTo sbreng
-		If modified=False And EmptiesOnStart  Then
-			Call empties()
-		End If
-		hasError=True
-		modified=True
-		
-		Call rtitem.Appendstyle(boldstyle)
-		Call addTextLine(Txt)
-		Call rtitem.Appendstyle(stdstyle)
-		Call rtitem.Appendtext("")
-		
+ %END REM
+ Property Get ismodified As Integer
+  ismodified=modified
+ End Property
+
+ Public Sub addErrorTextLine(txt$)
+  On Error GoTo sbreng
+  If modified=False And EmptiesOnStart Then
+   Call empties()
+  End If
+  hasError=True
+  modified=True
+
+  Call rtitem.Appendstyle(boldstyle)
+  Call rtitem.AppendText(txt$)
+  Call rtitem.AddNewline(1, True)
+  Call rtitem.Appendstyle(stdstyle)
+  Call rtitem.Appendtext("")
+
+  If Not doc.Hasitem("HasError") Then
+   Call doc.Replaceitemvalue("Haserror", 1)
+  End If
+
 endop:
-		Exit Sub
+  Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
-	End Sub
-	
-	%REM
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Sub
+
+ %REM
                         Function getClassname
                         Description: get string "Class: xxxxx, "
-	%END REM
-	Private Function getClassName() As String
-		On Error GoTo sbreng
-		Dim classname$
-		classname=TypeName(Me)
-		If Len(classname)>0 Then getClassName= "Class: " & classname & ", "
+ %END REM
+ Private Function getClassName() As String
+  On Error GoTo sbreng
+  Dim classname$
+  classname=TypeName(Me)
+  If Len(classname)>0 Then getClassName= "Class: " & classname & ", "
 endop:
-		Exit Function
+  Exit Function
 sbreng:
-		Resume endop
-	End Function
-	
-	%REM
+  Resume endop
+ End Function
+
+ %REM
                         Sub deleteOldDocsExiting
-	%END REM
-	Public Sub deleteOldLogsExiting(LogViewName As String,docsToKeep As Long)
-		me.LogViewName =LogViewName
-		me.docsToKeep =docsToKeep            
-	End Sub
-	
-	%REM
+ %END REM
+ Public Sub deleteOldLogsExiting(LogViewName As String,docsToKeep As Long)
+  me.LogViewName =LogViewName
+  me.docsToKeep =docsToKeep 
+ End Sub
+
+ %REM
             Function KeepOnlyLastLogs
             Description: keep only last log documents
-	%END REM
-	Private Function KeepOnlyLastLogs() As Long
-		
-		On Error GoTo sbreng
-		Dim LogView As NotesView
-		
-		If Not saveLogDoc Then
-			'nothing to delete
-			Exit Function
-		End If
-		
-		
-		If Len(LogViewName)=0 Then
-			Call addTextLine("Deletion of old document not possible: Please use {deleteOldLogsExiting(LogViewName As String, docsToKeep As Long)}")
-			Exit Function
-		End If
-		
-		If me.docsToKeep<1 Then
-			Call addTextLine("Deletion of old document not executed: docsToKeep=0")
-			Exit Function
-		End If
-		
-		Set logView=db.Getview(LogViewName)
-		
-		If LogView Is Nothing Then
-			Call addErrorTextLine("Unable open view -" & LogViewName & "- to delete old log documents")
-			Exit Function
-		End If
-		'checking the view sort order, to delete first or last documents
-		Dim colonna As NotesViewColumn, keepFirstOrLast As Integer
-		
-		ForAll col In LogView.Columns
-			Set colonna=col
-			If colonna.Issorted Then
-				If InStr(1,colonna.Formula, "@created", 5) Or _
-				InStr(1,colonna.Formula, "@modified", 5) Then
-					If colonna.Issortdescending Then
-						keepFirstOrLast =1     
-					Else
-						keepFirstOrLast =2
-					End If
-				End If
-			End If
-		End ForAll
-		
-		If keepFirstOrLast =0 Then
-			Call addErrorTextLine("Not deleting old logs: make the view sorted  ascending or descending in any column by @created or @modified to allow deletion of old log  documents.")
-			Exit Function
-		End If
-		
-		Dim entries As NotesViewEntryCollection,  discardDocs As  NotesDocumentCollection
-		Dim ve As NotesViewEntry, nextve As NotesViewEntry, countEntries As Long
-		Set entries=LogView.Allentries
-		
-		If keepFirstOrLast=1 Then
-			'skip and keep first documents
-			Set ve=entries.Getfirstentry()
-		Else
-			'skip and keep last documents
-			Set ve=entries.Getlastentry()
-		End If
-		
-		countEntries=0
-		Do While Not ve Is Nothing And countEntries<=me.docsToKeep
-			countEntries=countEntries+1
-			If keepFirstOrLast=1 Then
-				Set nextve=entries.Getnextentry(ve)
-			Else
-				Set nextve=entries.Getpreventry(ve)
-			End If                        
-			
-			If ve.Isdocument And ve.Isvalid Then
-				Call entries.Deleteentry(ve)
-			End If
-			
-			Set ve=nextve
-		Loop
-		Call addErrorTextLine("Removing " + CStr(entries.Count) + " old log documents")
-		On Error 4000 GoTo notAccessDeletion
-		Call entries.Removeall(True)
-		
+ %END REM
+ Private Function KeepOnlyLastLogs() As Long
+
+  On Error GoTo sbreng
+  Dim LogView As NotesView
+
+  If Not saveLogDoc Then
+   'nothing to delete
+   Exit Function
+  End If
+
+
+  If Len(LogViewName)=0 Then
+   Call addTextLine("Deletion of old document not possible: Please use {deleteOldLogsExiting(LogViewName As String, docsToKeep As Long)}")
+   Exit Function
+  End If
+
+  If me.docsToKeep<1 Then
+   Call addTextLine("Deletion of old document not executed: docsToKeep=0")
+   Exit Function
+  End If
+
+  Set logView=db.Getview(LogViewName)
+
+  If LogView Is Nothing Then
+   Call addErrorTextLine("Unable open view -" & LogViewName & "- to delete old log documents")
+   Exit Function
+  End If
+  'checking the view sort order, to delete first or last documents
+  Dim colonna As NotesViewColumn, keepFirstOrLast As Integer
+
+  ForAll col In LogView.Columns
+   Set colonna=col
+   If colonna.Issorted Then
+    If InStr(1,colonna.Formula, "@created", 5) Or _
+    InStr(1,colonna.Formula, "@modified", 5) Then
+     If colonna.Issortdescending Then
+      keepFirstOrLast =1 
+     Else
+      keepFirstOrLast =2
+     End If
+    End If
+   End If
+  End ForAll
+
+  If keepFirstOrLast =0 Then
+   Call addErrorTextLine("Not deleting old logs: make the view sorted ascending or descending in any column by @created or @modified to allow deletion of old log documents.")
+   Exit Function
+  End If
+
+  Dim entries As NotesViewEntryCollection, discardDocs As NotesDocumentCollection
+  Dim ve As NotesViewEntry, nextve As NotesViewEntry, countEntries As Long
+  Set entries=LogView.Allentries
+
+  If keepFirstOrLast=1 Then
+   'skip and keep first documents
+   Set ve=entries.Getfirstentry()
+  Else
+   'skip and keep last documents
+   Set ve=entries.Getlastentry()
+  End If
+
+  countEntries=0
+  Do While Not ve Is Nothing And countEntries<=me.docsToKeep
+   countEntries=countEntries+1
+   If keepFirstOrLast=1 Then
+    Set nextve=entries.Getnextentry(ve)
+   Else
+    Set nextve=entries.Getpreventry(ve)
+   End If 
+
+   If ve.Isdocument And ve.Isvalid Then
+    Call entries.Deleteentry(ve)
+   End If
+
+   Set ve=nextve
+  Loop
+  Call addTextLine("Removing " + CStr(entries.Count) + " old log documents")
+  On Error 4000 GoTo notAccessDeletion
+  Call entries.Removeall(True)
+
 endop:
-		Exit Function
+  Exit Function
 notAccessDeletion:
-		Call addErrorTextLine("Unable to get access to delete old log documents")
-		Resume Next
+  Call addErrorTextLine("Unable to get access to delete old log documents")
+  Resume Next
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
-	End Function
-	
-	%REM
-                        Sub save
-                        DDescription: not mandatory saving (destructor do it), maybe usefull to show temporary activities in long operations
-	%END REM
-	Public Sub save
-		If saveLogDoc Then
-			If doc.Isnewnote Then
-				'for new document put author field to allow to delete
-				Dim authItem As NotesItem
-				Set authitem=me.doc.replaceitemvalue("logAuthUsername",  me.ns.username)
-				authitem.isauthors=True
-			End If
-			Call doc.save(True, False, True)
-		End If
-		
-	End Sub
-	%REM
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Function
+
+ %REM
+        Sub save
+        DDescription: not mandatory saving (destructor do it), maybe usefull to show temporary activities in long operations
+ %END REM
+ Public Sub save
+  If saveLogDoc Then
+   If doc.Isnewnote Then
+    'for new document put author field to allow to delete
+    Dim authItem As NotesItem
+    Set authitem=me.doc.replaceitemvalue("logAuthUsername", me.ns.username)
+    authitem.isauthors=True
+   End If
+   Call doc.save(True, False, True)
+  End If
+
+ End Sub
+ %REM
             Function getDoc
-            Description:  return the log Doc, useful when constructor is being callled without an existing document 
-	%END REM
-	Public Function getDoc() As NotesDocument
-		Set getdoc=doc
-	End Function
-	%REM
+            Description: return the log Doc, useful when constructor is being callled without an existing document
+ %END REM
+ Public Function getDoc() As NotesDocument
+  Set getdoc=doc
+ End Function
+ %REM
             Function TimeText
-            Description:  return date time in ISO format: Format(Now, "yyyy-mm-dd hh.nn.ss") & ":"
-	%END REM
-	Public Function TimeText() As String
-		TimeText=Format(Now, "yyyy-mm-dd hh.nn.ss") & ":"
-	End Function
-	
-	%REM
+            Description: return date time in ISO format: Format(Now, "yyyy-mm-dd hh.nn.ss") & ":"
+ %END REM
+ Public Function TimeText() As String
+  TimeText=Format(Now, "yyyy-mm-dd hh.nn.ss") & ":"
+ End Function
+
+ %REM
             Function setTextField
             Description: set field to text value
-	%END REM
-	Public Function setField(fieldName As String, value As Variant) As logClass
-		Call doc.Replaceitemvalue(fieldname, value)
-		
-		Set setField=Me
+ %END REM
+ Public Function setField(fieldName As String, value As Variant) As logClass
+  Call doc.Replaceitemvalue(fieldname, value)
+
+  Set setField=Me
 endop:
-		Exit Function
+  Exit Function
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
-	End Function
-	
-	%REM
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Function
+
+ %REM
                         Function setSendOnlyifError
-                        Description: set send mode so message will be sent only if contains error  (addErrorTextLine called at least one time)
-	%END REM
-	Public Sub setSendOnlyifError(value As Boolean)
-		sendOnlyifError=value
-	End Sub
-	
-	public Function MayIUseFEClass() As Boolean
-		Const ErrAdtCreateError = 217
-		On Error 217 GoTo NoYouMayNot
-		Dim uiws As NotesUIWorkspace ' declare front-end class
-		Set uiws = New NotesUIWorkspace 
-		MayIUseFEClass = True  
-		Exit Function
+                        Description: set send mode so message will be sent only if contains error (addErrorTextLine called at least one time)
+ %END REM
+ Public Sub setSendOnlyifError(value As Boolean)
+  sendOnlyifError=value
+ End Sub
+
+ Public Function MayIUseFEClass() As Boolean
+  Const ErrAdtCreateError = 217
+  On Error 217 GoTo NoYouMayNot
+  Dim uiws As NotesUIWorkspace ' declare front-end class
+  Set uiws = New NotesUIWorkspace
+  MayIUseFEClass = True 
+  Exit Function
 NOYOUMAYNOT:
-		MayIUSEFEClass = False
-		Exit Function
-	End Function
-	
-	%REM
-		Sub AppendDoclink
-		Description: Add a link to the object
-	%END REM
-	Public Sub AppendDoclink(LinkTo As variant, comment As string , HotSpotText As string )
-		On Error GoTo sbreng
-		
-		Call rtitem.AppendDocLink( linkTo , comment$ , HotSpotText$ ) 
-		Call rtitem.Addnewline(1, True)
-		
-		
-		Exit Sub
+  MayIUSEFEClass = False
+  Exit Function
+ End Function
+
+ %REM
+Sub AppendDoclink
+Description: Add a link to the object
+ %END REM
+ Public Sub AppendDoclink(LinkTo As Variant, comment As String , HotSpotText As String )
+  On Error GoTo sbreng
+
+  Call rtitem.AppendDocLink( linkTo , comment$ , HotSpotText$ )
+  Call rtitem.Addnewline(1, True)
+
+
+  Exit Sub
 sbreng:
-		Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() &  GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")" 
-	End Sub
+  Error Err, "Error: " & Err & " - " & Error$ & " (" & getClassName() & GetThreadInfo(LSI_THREAD_PROC) & ", line " & Erl & ")"
+ End Sub
 End Class
