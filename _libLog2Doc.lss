@@ -21,8 +21,8 @@ Const LSI_THREAD_PROC=1
             2019-12-21: added .hasError and setSendOnlyifError to send error only if has an error (addErrorTextLine called once)
                                                                         added doPrint if in front end
             2023-07-27: added .AppendDoclink to inser a link on the log to an object (doc, View, DB)
-            2026-06-25: added an item "HasError"=1 on document to make its evidence in a log view
-   2026-06-29: added addColoredTextLine(txt, logClass.color) 
+            2025-06-25: added an item "HasError"=1 on document to make its evidence in a log view
+            2025-06-29: added addColoredTextLine(txt, logClass.color) 
             Description: Class log
 %END REM
 %REM
